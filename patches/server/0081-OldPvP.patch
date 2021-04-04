@@ -1,0 +1,149 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: copyandexecute <58366920+copyandexecute@users.noreply.github.com>
+Date: Sun, 4 Apr 2021 10:54:12 +0200
+Subject: [PATCH] OldPvP
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index c56e7fb18f9a56c8025eb70a524f028b5942da37..9defe5c7f83bc00dad1b0a71b291df4a7030c257 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -225,6 +225,23 @@ public class PaperConfig {
+                 " - Server Name: " + timingsServerName);
+     }
+ 
++    //HGLabor OldCombat Start
++    public static boolean disableSweeping;
++    public static boolean oldKnockback;
++    public static String oldKnockbackKey;
++    public static boolean disableNewHitSounds;
++    public static boolean overrideVelocity;
++    public static boolean disableShieldKnockback;
++    private static void combatSettings() {
++        disableSweeping = getBoolean("settings.combat.disable-sweeping", disableSweeping);
++        oldKnockback = getBoolean("settings.combat.old-knockback", oldKnockback);
++        disableShieldKnockback = getBoolean("settings.combat.disableShieldKnockback", disableShieldKnockback);
++        overrideVelocity = getBoolean("settings.combat.overrideVelocity", overrideVelocity);
++        oldKnockbackKey = getString("settings.combat.old-knockback-key", "oldKnockback");
++        disableNewHitSounds = getBoolean("settings.combat.disable-new-hit-sounds", disableNewHitSounds);
++    }
++    //HGLabor OldCombat End
++
+     public static boolean useDisplayNameInQuit = false;
+     private static void useDisplayNameInQuit() {
+         useDisplayNameInQuit = getBoolean("use-display-name-in-quit-message", useDisplayNameInQuit);
+diff --git a/src/main/java/net/minecraft/world/entity/EntityLiving.java b/src/main/java/net/minecraft/world/entity/EntityLiving.java
+index 561905be42428855a07a2e63aca80d5dd63b22bf..9467bc56c3ee58490ea65d303bb49d54fb7eabcc 100644
+--- a/src/main/java/net/minecraft/world/entity/EntityLiving.java
++++ b/src/main/java/net/minecraft/world/entity/EntityLiving.java
+@@ -1,5 +1,6 @@
+ package net.minecraft.world.entity;
+ 
++import com.destroystokyo.paper.PaperConfig;
+ import com.destroystokyo.paper.event.player.PlayerArmorChangeEvent; // Paper
+ import com.google.common.base.Objects;
+ import com.google.common.collect.ImmutableList;
+@@ -1672,7 +1673,10 @@ public abstract class EntityLiving extends Entity {
+             Vec3D vec3d = this.getMot();
+             Vec3D vec3d1 = (new Vec3D(d0, 0.0D, d1)).d().a((double) f);
+ 
+-            this.setMot(vec3d.x / 2.0D - vec3d1.x, this.onGround ? Math.min(0.4D, vec3d.y / 2.0D + (double) f) : vec3d.y, vec3d.z / 2.0D - vec3d1.z);
++            if (PaperConfig.oldKnockback && this.getBukkitEntity().hasMetadata(PaperConfig.oldKnockbackKey) && knockingBackEntity.getBukkitEntity().hasMetadata(PaperConfig.oldKnockbackKey))
++                this.setMot(vec3d.x / 2.0D - vec3d1.x, Math.min(0.4D, vec3d.y / 2.0D + (double) f), vec3d.z / 2.0D - vec3d1.z);
++            else
++                this.setMot(vec3d.x / 2.0D - vec3d1.x, this.onGround ? Math.min(0.4D, vec3d.y / 2.0D + (double) f) : vec3d.y, vec3d.z / 2.0D - vec3d1.z);
+ 
+             // Paper start - call EntityKnockbackByEntityEvent
+             Vec3D currentMot = this.getMot();
+diff --git a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
+index 44038dd278b988508047023107683e5370af54ad..e484379a2ec4b754118ddffb33dacee1cbfb64b0 100644
+--- a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
++++ b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
+@@ -1,5 +1,6 @@
+ package net.minecraft.world.entity.player;
+ 
++import com.destroystokyo.paper.PaperConfig;
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.ImmutableMap;
+ import com.google.common.collect.Lists;
+@@ -114,6 +115,7 @@ import net.minecraft.world.scores.ScoreboardTeam;
+ import net.minecraft.world.scores.ScoreboardTeamBase;
+ 
+ // CraftBukkit start
++import org.bukkit.craftbukkit.entity.CraftEntity;
+ import org.bukkit.craftbukkit.entity.CraftHumanEntity;
+ import org.bukkit.craftbukkit.event.CraftEventFactory;
+ import org.bukkit.craftbukkit.util.CraftVector;
+@@ -873,7 +875,11 @@ public abstract class EntityHuman extends EntityLiving {
+ 
+     @Override
+     protected void shieldBlock(EntityLiving entityliving) {
+-        super.shieldBlock(entityliving);
++        //HGLABOR DISABLE SHIELDKB START
++        if (!PaperConfig.disableShieldKnockback) {
++            super.shieldBlock(entityliving);
++        }
++        //HGLABOR DISABLE SHIELDKB END
+         if (entityliving.getItemInMainHand().getItem() instanceof ItemAxe) {
+             this.p(true);
+         }
+@@ -1142,7 +1148,8 @@ public abstract class EntityHuman extends EntityLiving {
+                     int i = b0 + EnchantmentManager.b((EntityLiving) this);
+ 
+                     if (this.isSprinting() && flag) {
+-                        sendSoundEffect(this, this.locX(), this.locY(), this.locZ(), SoundEffects.ENTITY_PLAYER_ATTACK_KNOCKBACK, this.getSoundCategory(), 1.0F, 1.0F); // Paper - send while respecting visibility
++                        if (!com.destroystokyo.paper.PaperConfig.disableNewHitSounds)
++                            sendSoundEffect(this, this.locX(), this.locY(), this.locZ(), SoundEffects.ENTITY_PLAYER_ATTACK_KNOCKBACK, this.getSoundCategory(), 1.0F, 1.0F); // Paper - send while respecting visibility
+                         ++i;
+                         flag1 = true;
+                     }
+@@ -1159,7 +1166,7 @@ public abstract class EntityHuman extends EntityLiving {
+                     boolean flag3 = false;
+                     double d0 = (double) (this.A - this.z);
+ 
+-                    if (flag && !flag2 && !flag1 && this.onGround && d0 < (double) this.dN()) {
++                    if (!com.destroystokyo.paper.PaperConfig.disableSweeping && flag && !flag2 && !flag1 && this.onGround && d0 < (double) this.dN()) {
+                         ItemStack itemstack = this.b(EnumHand.MAIN_HAND);
+ 
+                         if (itemstack.getItem() instanceof ItemSword) {
+@@ -1192,7 +1199,17 @@ public abstract class EntityHuman extends EntityLiving {
+                     if (flag5) {
+                         if (i > 0) {
+                             if (entity instanceof EntityLiving) {
+-                                ((EntityLiving) entity).doKnockback((float) i * 0.5F, (double) MathHelper.sin(this.yaw * 0.017453292F), (double) (-MathHelper.cos(this.yaw * 0.017453292F)), this); // Paper
++                                //HGLabor START oldKB
++                                if (com.destroystokyo.paper.PaperConfig.oldKnockback) {
++                                    CraftHumanEntity damager = this.getBukkitEntity();
++                                    CraftEntity enemy = entity.getBukkitEntity();
++                                    if (damager.hasMetadata(com.destroystokyo.paper.PaperConfig.oldKnockbackKey) && enemy.hasMetadata(com.destroystokyo.paper.PaperConfig.oldKnockbackKey)) {
++                                        entity.i(-MathHelper.sin(this.yaw * 0.017453292F) * (float) i * 0.5F, 0.1D, MathHelper.cos(this.yaw * 0.017453292F) * (float) i * 0.5F);
++                                    } else {
++                                        ((EntityLiving) entity).doKnockback((float) i * 0.5F, MathHelper.sin(this.yaw * 0.017453292F), -MathHelper.cos(this.yaw * 0.017453292F), this); // Paper
++                                    }
++                                }
++                                //HGLabor END oldKB
+                             } else {
+                                 entity.i((double) (-MathHelper.sin(this.yaw * 0.017453292F) * (float) i * 0.5F), 0.1D, (double) (MathHelper.cos(this.yaw * 0.017453292F) * (float) i * 0.5F));
+                             }
+@@ -1310,7 +1327,8 @@ public abstract class EntityHuman extends EntityLiving {
+ 
+                         this.applyExhaustion(world.spigotConfig.combatExhaustion, EntityExhaustionEvent.ExhaustionReason.ATTACK); // CraftBukkit - EntityExhaustionEvent // Spigot - Change to use configurable value
+                     } else {
+-                        sendSoundEffect(this, this.locX(), this.locY(), this.locZ(), SoundEffects.ENTITY_PLAYER_ATTACK_NODAMAGE, this.getSoundCategory(), 1.0F, 1.0F); // Paper - send while respecting visibility
++                        if (!com.destroystokyo.paper.PaperConfig.disableNewHitSounds)
++                            sendSoundEffect(this, this.locX(), this.locY(), this.locZ(), SoundEffects.ENTITY_PLAYER_ATTACK_NODAMAGE, this.getSoundCategory(), 1.0F, 1.0F); // Paper - send while respecting visibility
+                         if (flag4) {
+                             entity.extinguish();
+                         }
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index 45e786565ac988abadffda2e7ba3ff1e2880b786..4d4a0509be4a1663797f9e32af47c2db944b62f0 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -137,6 +137,7 @@ import org.bukkit.plugin.messaging.StandardMessenger;
+ import org.bukkit.scoreboard.Scoreboard;
+ 
+ import net.md_5.bungee.api.chat.BaseComponent; // Spigot
++import org.bukkit.util.Vector;
+ 
+ @DelegateDeserialization(CraftOfflinePlayer.class)
+ public class CraftPlayer extends CraftHumanEntity implements Player {
